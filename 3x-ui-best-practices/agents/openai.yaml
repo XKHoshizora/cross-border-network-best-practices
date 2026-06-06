@@ -1,0 +1,4 @@
+interface:
+  display_name: "3x-ui Best Practices"
+  short_description: "Install, configure, and troubleshoot 3x-ui/Xray panels safely."
+  default_prompt: "Use this skill to install or harden a 3x-ui panel, configure inbounds and clients, or debug connection, API, traffic, subscription, and Xray runtime issues."

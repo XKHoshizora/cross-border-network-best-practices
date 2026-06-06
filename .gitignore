@@ -1,0 +1,56 @@
+# Secrets & local credentials
+# This repo's core rule is to never commit real secrets (API tokens, Reality
+# private keys, client UUID/password/auth, subIds, subscription/panel URLs).
+# Examples must use placeholders only; the patterns below are a safety net
+# against accidentally committing local credential files.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.secret
+secrets.*
+
+# 3x-ui / Xray local runtime state, as created by the documented Docker examples
+# (the Compose file mounts ./db/ and ./cert/). Never commit a live DB or certs.
+db/
+cert/
+*.db
+
+# Claude Code local settings (in-repo backup for contributors without a global ignore)
+.claude/settings.local.json
+
+# Editors & IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+*.sublime-project
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# Logs, temp & scratch
+*.log
+*.tmp
+*.bak
+tmp/
