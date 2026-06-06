@@ -1,5 +1,7 @@
 # Cross-Border Network Best Practices
 
+[![English](https://img.shields.io/badge/-English-lightgrey?style=for-the-badge)](README.md) [![简体中文](https://img.shields.io/badge/-简体中文-blue?style=for-the-badge)](README.zh_CN.md)
+
 这是一个面向普通人的跨境网络与翻墙相关 AI Agent Skills 集合。
 
 项目的核心想法很简单：把原本分散在开源项目、运维经验、客户端配置、协议参数和故障排查里的知识，整理成 AI Agent 可以直接使用的 Skills。这样，更多没有系统网络工程背景的人，也可以在 AI 的帮助下理解、安装、配置、调试自己的跨境网络访问能力。

@@ -1,5 +1,7 @@
 # 3x-ui-best-practices
 
+[![English](https://img.shields.io/badge/-English-blue?style=for-the-badge)](README.md) [![简体中文](https://img.shields.io/badge/-简体中文-lightgrey?style=for-the-badge)](README.zh_CN.md)
+
 This Skill helps an AI Agent install, harden, configure, and troubleshoot 3X-UI from scratch. It covers 3X-UI panel installation, inbound rules, clients, subscriptions, Bearer API usage, logs, and common diagnostics.
 
 ## Contents

@@ -1,5 +1,7 @@
 # Cross-Border Network Best Practices
 
+[![English](https://img.shields.io/badge/-English-blue?style=for-the-badge)](README.md) [![简体中文](https://img.shields.io/badge/-简体中文-lightgrey?style=for-the-badge)](README.zh_CN.md)
+
 This repository is a collection of AI Agent Skills for cross-border networking and censorship-circumvention practices, designed for ordinary users rather than only network specialists.
 
 The core idea is simple: knowledge that is usually scattered across open-source projects, operations notes, client configuration guides, protocol parameters, and troubleshooting experience can be organized into reusable AI Agent Skills. With those Skills, people without a deep networking background can ask an AI agent to help them understand, install, configure, and debug their own cross-border network access setup.

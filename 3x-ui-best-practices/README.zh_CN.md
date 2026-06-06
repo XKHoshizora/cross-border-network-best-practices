@@ -1,5 +1,7 @@
 # 3x-ui-best-practices
 
+[![English](https://img.shields.io/badge/-English-lightgrey?style=for-the-badge)](README.md) [![简体中文](https://img.shields.io/badge/-简体中文-blue?style=for-the-badge)](README.zh_CN.md)
+
 这个 Skill 用于帮助 AI Agent 从零安装、加固、配置和排查 3X-UI。它覆盖 3X-UI 面板安装、入站规则、客户端、订阅、Bearer API、日志和常见故障诊断。
 
 ## 目录
