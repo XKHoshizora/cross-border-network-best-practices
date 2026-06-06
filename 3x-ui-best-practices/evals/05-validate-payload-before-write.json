@@ -1,0 +1,12 @@
+{
+  "skills": ["3x-ui-best-practices"],
+  "query": "Here is an inbound JSON I am about to POST to /panel/api/inbounds/add. Check it for me before I send it.",
+  "files": ["test-files/bad-inbound.json"],
+  "expected_behavior": [
+    "Validates the payload before any write, for example by running scripts/validate_config.py on it",
+    "Identifies that flow must be set per client, not at the inbound top level",
+    "Identifies that VLESS settings.decryption must be \"none\"",
+    "Flags the invalid sniffing destOverride entry and the REALITY block missing serverNames",
+    "Does not POST to the panel without explicit user confirmation, and does not expose secret-bearing values"
+  ]
+}

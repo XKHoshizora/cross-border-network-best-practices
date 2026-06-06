@@ -2,6 +2,19 @@
 
 This reference is for agents that need precise 3x-ui/Xray API and config shape details. It is based on the MHSanaei/3x-ui repository, its wiki, and a live OpenAPI document from a 3.x panel.
 
+## Contents
+
+- [Live Panel Shape Observed](#live-panel-shape-observed)
+- [Authentication](#authentication)
+- [Install Reference](#install-reference)
+- [Endpoint Risk Classes](#endpoint-risk-classes)
+- [Troubleshooting Matrix](#troubleshooting-matrix)
+- [Inbound Top-Level Fields](#inbound-top-level-fields)
+- [Client Fields](#client-fields)
+- [Protocol Settings](#protocol-settings)
+- [Stream Settings](#stream-settings)
+- [Best-Practice Payloads](#best-practice-payloads)
+
 ## Live Panel Shape Observed
 
 The inspected live panel had this sanitized topology:

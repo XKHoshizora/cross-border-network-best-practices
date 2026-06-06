@@ -1,0 +1,12 @@
+{
+  "skills": ["3x-ui-best-practices"],
+  "query": "Install 3x-ui on a fresh Ubuntu VPS and harden it for production use.",
+  "files": [],
+  "expected_behavior": [
+    "Opens only the required firewall ports (SSH, panel, subscription, and each inbound port) and explains that the panel and Xray inbounds listen separately",
+    "After install, rotates the admin username/password and sets a non-obvious web base path",
+    "Enables HTTPS for the panel when a domain/certificate is available and considers 2FA",
+    "Recommends creating a Bearer API token for automation instead of using the admin password",
+    "Treats the panel as production and uses placeholders for any credentials rather than inventing or exposing real secrets"
+  ]
+}

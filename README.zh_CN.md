@@ -44,9 +44,13 @@
 │   ├── README.md
 │   ├── README.zh_CN.md
 │   ├── agents/
-│   └── references/
+│   ├── references/
+│   ├── scripts/
+│   └── evals/
+├── CLAUDE.md
 ├── LICENSE
-└── README.md
+├── README.md
+└── README.zh_CN.md
 ```
 
 每个 Skill 应该独立放在自己的目录中，并至少包含：
@@ -56,6 +60,8 @@
 - `README.zh_CN.md`：中文文档，面向中文用户解释背景、步骤和示例。
 - `references/`：较长的参考资料、API 字段、配置说明或排查手册。
 - `agents/`：可选，用于不同 Agent 平台的集成示例。
+- `scripts/`：可选，agent 可运行的离线辅助脚本（不联网）。
+- `evals/`：可选，用于测试 Skill 的场景评测集（无内置运行器）。
 
 ## 如何使用
 
@@ -127,6 +133,7 @@ flowchart LR
 5. 明确标出只读操作、会修改配置的操作、需要用户确认的操作。
 6. 配置示例要尽量完整可用，并解释每个关键字段的用途。
 7. 如果包含 Mermaid 图、流程图或拓扑图，应服务于理解，不做装饰性堆叠。
+8. 遵循 Agent Skills 规范：`name` ≤64 字符（小写字母/数字/连字符，与目录同名，不含 "anthropic"/"claude"）；`description` ≤1024 字符，说明用途和触发时机；`SKILL.md` 控制在约 500 行以内；引用保持一层深度；超过约 100 行的文件加目录。
 
 ## 免责声明
 

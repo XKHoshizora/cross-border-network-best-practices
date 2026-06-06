@@ -1,0 +1,13 @@
+{
+  "skills": ["3x-ui-best-practices"],
+  "query": "Design a VLESS + REALITY inbound on port 443 for a VPS that is directly reachable (no CDN), and explain why each client parameter is set the way it is.",
+  "files": [],
+  "expected_behavior": [
+    "Produces a VLESS over TCP inbound with security REALITY, settings.decryption \"none\", and settings.encryption \"none\"",
+    "Uses nested JSON objects for settings, streamSettings, and sniffing rather than legacy JSON-encoded strings",
+    "Enables sniffing for at least http and tls",
+    "Explains the client-side fields and their source: uuid, SNI/serverName, publicKey (pbk), shortId (sid), fingerprint (fp), and flow (xtls-rprx-vision)",
+    "Uses placeholder secrets (no real private key, public key, or UUID) and states that REALITY must be reached directly and never placed behind a CDN",
+    "Notes that flow is set per client (only when the inbound is tlsFlowCapable), not at the inbound top level"
+  ]
+}

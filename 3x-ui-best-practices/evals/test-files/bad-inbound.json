@@ -1,0 +1,19 @@
+{
+  "remark": "vless-reality-443",
+  "port": 443,
+  "protocol": "vless",
+  "flow": "xtls-rprx-vision",
+  "settings": {
+    "clients": [{ "email": "alice@example.test" }],
+    "decryption": "xtls",
+    "encryption": "none"
+  },
+  "streamSettings": {
+    "network": "ws",
+    "security": "reality"
+  },
+  "sniffing": {
+    "enabled": true,
+    "destOverride": ["http", "tls", "bogus"]
+  }
+}

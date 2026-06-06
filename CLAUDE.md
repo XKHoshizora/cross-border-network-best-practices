@@ -14,6 +14,7 @@ There is nothing to build or run. The only relevant tooling is `git` plus two ma
 
 - Bilingual drift: `wc -l **/README*.md` — an EN file and its `*.zh_CN.md` counterpart should stay close.
 - Secret scan before committing: grep the diff for real tokens, UUIDs, Reality private keys, `subId`s, and panel URLs (see redaction rule below).
+- Helper-script self-tests: `python 3x-ui-best-practices/scripts/validate_config.py --self-test` (and likewise `parse_share_link.py`).
 
 ## Skill Architecture (progressive disclosure)
 
@@ -23,6 +24,8 @@ Each Skill is a self-contained directory built as layers, so an agent reads only
 - `references/api-and-config-reference.md` — long-form, precise field tables, endpoint risk classes, troubleshooting matrix, and example payloads. The detail layer.
 - `README.md` / `README.zh_CN.md` — human-facing documentation with Mermaid diagrams and copy-pasteable examples (English + Simplified Chinese).
 - `agents/` — optional per-platform interface descriptors (e.g. `openai.yaml`: display name, short description, default prompt). Not behavior; just integration metadata.
+- `scripts/` — optional offline helpers Claude runs via bash (e.g. `validate_config.py`, `parse_share_link.py`). Only their *output* enters context, not their source. Keep them no-network so they work on every surface — the Claude API surface has no network access.
+- `evals/` — optional scenario rubric (`*.json` with `skills`/`query`/`files`/`expected_behavior`) plus fixtures under `test-files/`. No built-in runner; used as a no-regression baseline when changing a Skill.
 
 The bottom of `SKILL.md` has an explicit routing block ("Read `references/…` when you need X; read `README.md` when the user wants Y"). **That routing is the contract.** When you add content, decide which layer it belongs in and keep the routing accurate. Don't copy reference tables up into `SKILL.md` — link down to them.
 
@@ -40,4 +43,15 @@ Two properties drive Skill behavior and must stay correct:
 
 ## Adding a New Skill
 
-Mirror the `3x-ui-best-practices/` layout: a lowercase-hyphenated directory containing a concise `SKILL.md` (with a keyword-rich `description`), `README.md`, `README.zh_CN.md`, and `references/` for long material; add `agents/` only if you ship platform descriptors. Then register the Skill in the "Current Skills" section of **both** root `README.md` and `README.zh_CN.md`. Keep `SKILL.md` focused on agent behavior, boundaries, and checklists; put long tables and full examples in `references/`; use diagrams only when they aid understanding.
+Mirror the `3x-ui-best-practices/` layout: a lowercase-hyphenated directory with a concise `SKILL.md` (keyword-rich `description`), `README.md`, `README.zh_CN.md`, and `references/` for long material; add `agents/`, `scripts/`, and `evals/` only as needed. Register the Skill in the "Current Skills" section of **both** root `README.md` and `README.zh_CN.md`.
+
+The [Agent Skills spec](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) imposes hard constraints — keep new Skills inside them:
+
+- `name`: ≤64 chars, lowercase letters/numbers/hyphens only, no XML tags, must not contain "anthropic" or "claude", and must match the directory name.
+- `description`: ≤1024 chars; states both *what* it does and *when* to use it; keyword-dense; no XML tags.
+- `SKILL.md` body under ~500 lines — push detail into `references/`.
+- References stay **one level deep** from `SKILL.md` (don't chain reference → reference).
+- Any bundled file over ~100 lines gets a Contents/table-of-contents at the top.
+- Always forward slashes in paths; make script intent explicit ("run X" vs "see X for reference").
+
+Keep `SKILL.md` focused on agent behavior, boundaries, and checklists; put long tables and full examples in `references/`; use diagrams only when they aid understanding.

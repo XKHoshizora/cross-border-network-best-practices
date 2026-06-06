@@ -44,7 +44,10 @@ Entry files:
 │   ├── README.md
 │   ├── README.zh_CN.md
 │   ├── agents/
-│   └── references/
+│   ├── references/
+│   ├── scripts/
+│   └── evals/
+├── CLAUDE.md
 ├── LICENSE
 ├── README.md
 └── README.zh_CN.md
@@ -57,6 +60,8 @@ Each Skill should live in its own directory and should include at least:
 - `README.zh_CN.md`: Chinese documentation for Chinese-speaking users.
 - `references/`: longer references, API fields, configuration notes, or troubleshooting manuals.
 - `agents/`: optional integration examples for specific agent platforms.
+- `scripts/`: optional offline helper scripts (no network) that the agent can run.
+- `evals/`: optional scenario rubric for testing the Skill (no built-in runner).
 
 ## How To Use
 
@@ -128,6 +133,7 @@ New Skills are welcome. Please follow these conventions:
 5. Clearly distinguish read-only operations, configuration-changing operations, and operations that require user confirmation.
 6. Make configuration examples complete enough to use, and explain the purpose of every key field.
 7. Use Mermaid diagrams, flowcharts, or topology diagrams only when they improve understanding.
+8. Follow the Agent Skills spec: `name` ≤64 chars (lowercase letters/numbers/hyphens, matching the directory, no "anthropic"/"claude"); `description` ≤1024 chars stating what it does and when to use it; keep `SKILL.md` under ~500 lines; keep references one level deep; and give any file over ~100 lines a table of contents.
 
 ## Disclaimer
 

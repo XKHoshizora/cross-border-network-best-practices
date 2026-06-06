@@ -2,6 +2,23 @@
 
 This Skill helps an AI Agent install, harden, configure, and troubleshoot 3X-UI from scratch. It covers 3X-UI panel installation, inbound rules, clients, subscriptions, Bearer API usage, logs, and common diagnostics.
 
+## Contents
+
+- [Design Principles](#design-principles)
+- [Fresh Installation](#fresh-installation)
+- [Backup and Restore](#backup-and-restore)
+- [Upgrade](#upgrade)
+- [API Basics](#api-basics)
+- [Inbound Rule Parameters](#inbound-rule-parameters)
+- [Recommended Inbound Example](#recommended-inbound-example-vless--tcp--reality--vision)
+- [Fallback Example](#fallback-example)
+- [Client Configuration](#client-configuration)
+- [Subscriptions](#subscriptions)
+- [Debugging and Troubleshooting](#debugging-and-troubleshooting)
+- [Pre-Change Checklist](#pre-change-checklist)
+- [Helper Scripts](#helper-scripts)
+- [References](#references)
+
 ## Design Principles
 
 - Diagnose with read-only checks first, then propose changes. Deletion, restarts, traffic resets, database imports, and panel updates require explicit confirmation.
@@ -128,6 +145,51 @@ network_mode: host
 5. Allow the panel port only from trusted admin IPs.
 6. If `limitIp` will be used, install and enable Fail2ban and set the Xray access log to `./access.log`.
 7. Create an API Token. Future automation should use Bearer Token auth, not the admin password.
+
+## Backup and Restore
+
+Back up before every upgrade, migration, or risky write. Panel, Xray, certificate, and service changes should always be reversible.
+
+What to back up:
+
+- SQLite database: `/etc/x-ui/x-ui.db` for native installs, or the `./db/` volume for Docker. It holds inbounds, clients, settings, and traffic stats.
+- Certificates: `./cert/` for Docker, or the configured certificate path for native installs.
+- The web base path, panel port, and credentials, stored separately as secrets (never in this repository).
+
+How to back up:
+
+```bash
+# Native: stop for a consistent copy, then restart.
+x-ui stop
+cp /etc/x-ui/x-ui.db /root/x-ui-backup-$(date +%F).db
+x-ui start
+
+# Docker: archive the mounted volumes.
+docker compose stop
+tar czf xui-backup-$(date +%F).tgz ./db ./cert
+docker compose start
+```
+
+The `x-ui` menu and the Telegram bot can also produce backups. Restoring a database overwrites current data and is high-risk: confirm before using `/panel/api/server/importDB` or a menu restore, and verify inbound/client counts afterward.
+
+## Upgrade
+
+```mermaid
+flowchart LR
+  A["Back up DB + cert"] --> B["Record current version/tag"]
+  B --> C{"Install type"}
+  C -->|Native| D["Rerun installer or x-ui menu update"]
+  C -->|Docker| E["compose pull && up -d, same volumes"]
+  D --> F["Verify status + counts + one client link"]
+  E --> F
+  F -->|Broken migration| G["Roll back to recorded version, restore DB"]
+```
+
+1. Back up the database and certificates first.
+2. Record the current version (panel footer or `/panel/api/server/status`) and, for Docker, the current image tag, so you can roll back.
+3. Native: rerun the official installer, or use the `x-ui` menu update entry. Docker: `docker compose pull && docker compose up -d`, reusing the same `./db/` and `./cert/` volumes.
+4. Verify: panel login, `/panel/api/server/status`, unchanged inbound/client counts, and one working client link.
+5. If a migration misbehaves (for example, traffic stuck at 0 after upgrade), check `getConfigJson` and Xray logs; if needed, roll back to the recorded version and restore the database backup.
 
 ## API Basics
 
@@ -550,6 +612,27 @@ Common issues:
 - No live secret will be written to a repository or chat log.
 - The write payload has been confirmed by the user.
 - There are verification commands and a rollback path after the write.
+
+## Helper Scripts
+
+The `scripts/` directory contains offline helpers that need no network or panel access, so they run on any surface and are safe to use while drafting a change. They complement, but never replace, presenting each payload and command to the user for confirmation.
+
+- `validate_config.py` — validate an inbound or client-add payload before you POST it: port range, VLESS `decryption`/`encryption`, XTLS-Vision gating, REALITY-behind-CDN, and common unit mistakes (bytes vs GiB, milliseconds vs seconds). The exit code is the number of errors.
+- `parse_share_link.py` — decode a VLESS/VMess/Trojan share link into normalized fields to compare against an inbound. The credential is masked by default, so the output is safe to share.
+
+```bash
+# Validate a payload before writing it (exit code = error count).
+python scripts/validate_config.py vless-reality-443.json
+cat client-alice.json | python scripts/validate_config.py -
+
+# Decode a share link with the credential masked.
+python scripts/parse_share_link.py 'vless://...#alice-node'
+
+# Confirm a helper works.
+python scripts/validate_config.py --self-test
+```
+
+Network-calling scripts are intentionally omitted: some surfaces have no network, and hiding live API calls would undercut the show-then-confirm workflow.
 
 ## References
 

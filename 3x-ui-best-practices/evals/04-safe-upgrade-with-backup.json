@@ -1,0 +1,12 @@
+{
+  "skills": ["3x-ui-best-practices"],
+  "query": "Upgrade my Docker Compose based 3x-ui to the latest version safely.",
+  "files": [],
+  "expected_behavior": [
+    "Backs up the database and certificates first (the ./db/ and ./cert/ volumes, or x-ui.db) before upgrading",
+    "Records the current image tag or version so the upgrade can be rolled back",
+    "Upgrades with docker compose pull followed by docker compose up -d, reusing the same ./db/ and ./cert/ volumes",
+    "Verifies afterward via /panel/api/server/status, checks that inbound/client counts are unchanged, and re-tests one client link",
+    "Treats database import/restore as a high-risk action that needs explicit confirmation"
+  ]
+}

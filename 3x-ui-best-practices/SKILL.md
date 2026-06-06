@@ -41,6 +41,13 @@ Use this skill to work with 3x-ui as a full Xray control-plane lifecycle: instal
 5. If using Docker with Fail2ban/IP limits, include `NET_ADMIN` and `NET_RAW`. If not using host networking, publish every inbound port explicitly.
 6. Verify with: panel login, service/container status, `/panel/api/openapi.json`, `/panel/api/server/status`, and a simple inbound/client link.
 
+## Upgrade and Backup Workflow
+
+1. Back up before any upgrade, migration, or risky write. The SQLite DB is `/etc/x-ui/x-ui.db` (native) or the `./db/` volume (Docker); also save `./cert/` when certificates are local. Prefer backing up with the service stopped, or use the panel/`x-ui` menu backup.
+2. Native upgrade: rerun the official installer or use the `x-ui` menu update entry. Docker upgrade: `docker compose pull && docker compose up -d` while reusing the same `./db/` and `./cert/` volumes.
+3. Record the prior version/image tag so a misbehaving migration can be rolled back to a known-good state.
+4. After upgrade, confirm `/panel/api/server/status`, check that inbound/client counts are unchanged, and re-test one client link. Treat panel update and DB import/restore as high-risk: confirm with the user first.
+
 ## Configuration Guidance
 
 Prefer these defaults unless the user's network constraints say otherwise:
@@ -84,6 +91,15 @@ For writes:
 3. Use the most specific endpoint (`setEnable` for enable flips, client endpoints for client changes).
 4. Verify with a read-only endpoint and, if needed, generated links (`/panel/api/clients/links/:email`) without exposing secrets in the final answer.
 
+## Scripts
+
+Offline helpers in `scripts/` run on any surface (no network, no panel access). They complement — but never replace — showing the user each payload and command:
+
+- Execute `scripts/validate_config.py <file|->` to validate an inbound or client-add payload before POSTing it: flow placement, VLESS `decryption`/`encryption`, XTLS-Vision gating, REALITY-behind-CDN, and byte-vs-GiB / ms-vs-seconds mistakes. The exit code is the error count; use it as the validate step before any write.
+- Execute `scripts/parse_share_link.py '<link>'` to decode a VLESS/VMess/Trojan link into normalized fields to compare against an inbound; the credential is masked by default.
+
+Run a script's `--self-test` to confirm it works. Do not add network-calling scripts: some surfaces have no network, and hiding live calls would undercut the show-then-confirm workflow.
+
 ## References
 
 Read [references/api-and-config-reference.md](references/api-and-config-reference.md) when you need endpoint groups, field tables, protocol-specific `settings`, `streamSettings`, or example payloads.
@@ -91,3 +107,5 @@ Read [references/api-and-config-reference.md](references/api-and-config-referenc
 Read [README.md](README.md) when the user wants English human-facing documentation, diagrams, or copy-pasteable configuration examples.
 
 Read [README.zh_CN.md](README.zh_CN.md) when the user wants the same documentation in Simplified Chinese.
+
+Use the offline helpers in [scripts/](scripts/): `validate_config.py` (validate a payload before writing) and `parse_share_link.py` (decode a share link, secrets masked).

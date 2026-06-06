@@ -2,6 +2,23 @@
 
 这个 Skill 用于帮助 AI Agent 从零安装、加固、配置和排查 3X-UI。它覆盖 3X-UI 面板安装、入站规则、客户端、订阅、Bearer API、日志和常见故障诊断。
 
+## 目录
+
+- [设计原则](#设计原则)
+- [从零安装](#从零安装)
+- [备份与恢复](#备份与恢复)
+- [升级](#升级)
+- [API 基础](#api-基础)
+- [入站规则参数](#入站规则参数)
+- [推荐入站示例](#推荐入站示例vless--tcp--reality--vision)
+- [fallback 示例](#fallback-示例)
+- [客户端配置](#客户端配置)
+- [订阅](#订阅)
+- [调试与排障](#调试与排障)
+- [变更前检查清单](#变更前检查清单)
+- [辅助脚本](#辅助脚本)
+- [参考资料](#参考资料)
+
 ## 设计原则
 
 - 先只读诊断，再提出变更。删除、重启、重置流量、导入数据库、更新面板都必须得到明确确认。
@@ -128,6 +145,51 @@ network_mode: host
 5. 只允许可信 IP 访问面板端口。
 6. 如果要使用 `limitIp`，安装并启用 Fail2ban，并把 Xray access log 设置为 `./access.log`。
 7. 创建 API Token，后续自动化只使用 Bearer Token，不使用管理员密码。
+
+## 备份与恢复
+
+每次升级、迁移或有风险的写入之前都要先备份。面板、Xray、证书和系统服务的变更都应可回滚。
+
+备份对象：
+
+- SQLite 数据库：原生安装为 `/etc/x-ui/x-ui.db`，Docker 为 `./db/` 卷。它保存入站、客户端、设置和流量统计。
+- 证书：Docker 为 `./cert/`，原生安装为配置的证书路径。
+- Web Base Path、面板端口和凭据，作为密钥单独保存（绝不写入本仓库）。
+
+如何备份：
+
+```bash
+# 原生：停服以获得一致快照，再启动。
+x-ui stop
+cp /etc/x-ui/x-ui.db /root/x-ui-backup-$(date +%F).db
+x-ui start
+
+# Docker：打包挂载卷。
+docker compose stop
+tar czf xui-backup-$(date +%F).tgz ./db ./cert
+docker compose start
+```
+
+`x-ui` 菜单和 Telegram bot 也能生成备份。恢复数据库会覆盖现有数据，属于高危操作：使用 `/panel/api/server/importDB` 或菜单恢复前先确认，恢复后核对入站/客户端数量。
+
+## 升级
+
+```mermaid
+flowchart LR
+  A["备份 DB + cert"] --> B["记录当前版本/镜像 tag"]
+  B --> C{"安装方式"}
+  C -->|原生| D["重跑安装器或 x-ui 菜单更新"]
+  C -->|Docker| E["compose pull && up -d，复用同卷"]
+  D --> F["验证状态 + 数量 + 一条客户端链接"]
+  E --> F
+  F -->|迁移异常| G["回滚到记录版本，恢复 DB"]
+```
+
+1. 先备份数据库和证书。
+2. 记录当前版本（面板页脚或 `/panel/api/server/status`），Docker 还要记录当前镜像 tag，便于回滚。
+3. 原生：重跑官方安装器，或用 `x-ui` 菜单更新。Docker：`docker compose pull && docker compose up -d`，复用同样的 `./db/` 和 `./cert/` 卷。
+4. 验证：面板登录、`/panel/api/server/status`、入站/客户端数量不变、一条可用的客户端链接。
+5. 如果迁移异常（例如升级后流量一直是 0），查 `getConfigJson` 和 Xray 日志；必要时回滚到记录的版本并恢复数据库备份。
 
 ## API 基础
 
@@ -550,6 +612,27 @@ curl -fsS -X POST -H "Authorization: Bearer ${XUI_API_TOKEN}" \
 - 已确认不会把 live secret 写入仓库或聊天记录。
 - 写入 payload 已由用户确认。
 - 写入后有验证命令和回滚路径。
+
+## 辅助脚本
+
+`scripts/` 目录提供离线辅助脚本，不需要网络或面板访问，在任何 surface 上都能运行，适合在起草变更时使用。它们是对「向用户展示每条 payload 和命令并确认」的补充，而非替代。
+
+- `validate_config.py` —— 在 POST 之前校验入站或 client-add payload：端口范围、VLESS 的 `decryption`/`encryption`、XTLS-Vision 适用条件、REALITY 是否被放在 CDN 后，以及常见单位错误（字节 vs GiB、毫秒 vs 秒）。退出码即错误数。
+- `parse_share_link.py` —— 把 VLESS/VMess/Trojan 分享链接解析成规范字段，便于和入站对照。凭据默认脱敏，输出可安全分享。
+
+```bash
+# 写入前校验 payload（退出码 = 错误数）。
+python scripts/validate_config.py vless-reality-443.json
+cat client-alice.json | python scripts/validate_config.py -
+
+# 解析分享链接（凭据脱敏）。
+python scripts/parse_share_link.py 'vless://...#alice-node'
+
+# 确认脚本可用。
+python scripts/validate_config.py --self-test
+```
+
+刻意不提供联网脚本：部分 surface 没有网络，而且把实时 API 调用藏进脚本会削弱「先展示再确认」的工作方式。
 
 ## 参考资料
 
