@@ -142,3 +142,13 @@ flowchart LR
 跨境网络访问能力受到地区法律、网络环境、服务商规则和个人安全模型影响。本仓库提供的是技术学习、配置说明和 Agent Skill 组织方式，不构成法律意见，也不保证任何特定地区、网络或服务商环境下可用。
 
 使用者应自行判断风险，并对自己的部署、配置、账号、服务器和网络行为负责。
+
+## Star 历史
+
+<a href="https://www.star-history.com/?repos=XKHoshizora%2Fcross-border-network-best-practices&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=XKHoshizora/cross-border-network-best-practices&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=XKHoshizora/cross-border-network-best-practices&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=XKHoshizora/cross-border-network-best-practices&type=date&legend=top-left" />
+ </picture>
+</a>

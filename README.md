@@ -142,3 +142,13 @@ New Skills are welcome. Please follow these conventions:
 Cross-border network access depends on regional law, network conditions, provider rules, and personal security models. This repository provides technical learning material, configuration guidance, and an Agent Skill organization pattern. It is not legal advice and does not guarantee usability in any specific country, network, or provider environment.
 
 Users are responsible for evaluating risk and for their own deployments, configurations, accounts, servers, and network behavior.
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=XKHoshizora%2Fcross-border-network-best-practices&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=XKHoshizora/cross-border-network-best-practices&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=XKHoshizora/cross-border-network-best-practices&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=XKHoshizora/cross-border-network-best-practices&type=date&legend=top-left" />
+ </picture>
+</a>
