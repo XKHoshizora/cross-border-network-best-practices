@@ -1,0 +1,12 @@
+{
+  "skills": [
+    "3x-ui-best-practices"
+  ],
+  "query": "Review a client flow change on a 3x-ui setup: the client is attached to both a VLESS TCP TLS inbound and a Trojan inbound, while another inbound has a non-none VLESS Encryption string. Do not change anything.",
+  "files": [],
+  "expected_behavior": [
+    "Checks all client attachments and flags classic Vision on Trojan rather than relying only on tlsFlowCapable.",
+    "Does not overwrite non-none encryption with none; checks deployed panel/core/client support.",
+    "States limits of offline validation and makes no live writes."
+  ]
+}

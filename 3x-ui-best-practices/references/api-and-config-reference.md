@@ -4,6 +4,7 @@ This reference is for agents that need precise 3x-ui/Xray API and config shape d
 
 ## Contents
 
+- [Compatibility scope](#compatibility-scope)
 - [Live Panel Shape Observed](#live-panel-shape-observed)
 - [Authentication](#authentication)
 - [Install Reference](#install-reference)
@@ -14,6 +15,12 @@ This reference is for agents that need precise 3x-ui/Xray API and config shape d
 - [Protocol Settings](#protocol-settings)
 - [Stream Settings](#stream-settings)
 - [Best-Practice Payloads](#best-practice-payloads)
+
+## Compatibility scope
+
+The original 3.x observation below did not record an exact version. Endpoint availability, authentication and accepted shapes must be confirmed against the deployed schema. Panel objects are not raw Xray configuration. Current upstream documentation was reviewed on 2026-11-04; no live panel was tested in that review.
+
+The classic VLESS profile uses `none` encryption; newer VLESS Encryption modes must be preserved and checked against the matching core. `tcp`/`raw` naming is version-dependent. Vision is a VLESS flow; a permissive panel field does not establish Trojan support.
 
 ## Live Panel Shape Observed
 
@@ -46,7 +53,12 @@ Bearer auth is implemented by the API controller on the `/panel/api` route group
 Native install:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
+export XUI_RELEASE='replace-with-reviewed-release-tag'
+curl -fSLo install.sh --connect-timeout 10 --max-time 120 \
+  "https://raw.githubusercontent.com/mhsanaei/3x-ui/${XUI_RELEASE}/install.sh"
+less install.sh
+# Run only after reviewing the script and its version-selection behavior.
+bash install.sh
 ```
 
 Notes:
@@ -55,32 +67,28 @@ Notes:
 - Use `x-ui` after install to reopen the management menu for service control, credentials, SSL certificate management, and firewall/IP-limit tasks.
 - If GitHub download fails at DNS/timeout, retry with `curl --ipv4` or fix DNS before rerunning.
 
-Docker Compose baseline:
+Docker Compose baseline (set `XUI_IMAGE` to a reviewed release tag/digest; access the loopback panel via SSH tunnel or a secured reverse proxy):
 
 ```yaml
 services:
   3xui:
-    image: ghcr.io/mhsanaei/3x-ui:latest
+    image: ${XUI_IMAGE:?Set a reviewed release tag or digest}
     container_name: 3xui_app
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
     volumes:
       - ./db/:/etc/x-ui/
       - ./cert/:/root/cert/
     environment:
-      XRAY_VMESS_AEAD_FORCED: "false"
-      XUI_ENABLE_FAIL2BAN: "true"
+      XUI_ENABLE_FAIL2BAN: "false"
     ports:
-      - "2053:2053"
-      - "443:443"
+      - "127.0.0.1:2053:2053/tcp"
+      - "443:443/tcp"
     restart: unless-stopped
 ```
 
 Docker notes:
 
 - The `ports` block must publish every inbound port unless using `network_mode: host`.
-- Fail2ban enforcement needs `NET_ADMIN`; IPv6 iptables also needs `NET_RAW`.
+- This baseline disables Fail2ban and omits extra capabilities. Enable it and add the needed `NET_ADMIN`/`NET_RAW` only when IP-limit enforcement is requested, then verify actual bans.
 - Change default Docker credentials (`admin`/`admin`) immediately.
 - For PostgreSQL, set `XUI_DB_TYPE=postgres` and `XUI_DB_DSN=postgres://...`; SQLite default DB lives under `/etc/x-ui/`.
 
@@ -141,7 +149,7 @@ High-risk endpoints that require explicit approval:
 | Panel unreachable | Service/container status, firewall, panel port/path, TLS cert path | Closed port, wrong base path, expired/bad panel SSL, service stopped | Verify local `curl` to panel port, then external firewall. |
 | API token returns redirect/404 | Request path and endpoint group | Token valid only on `/panel/api/*` in some versions | Use `/panel/api/*`; for settings use UI session + CSRF. |
 | Client cannot connect | `/server/status`, `/inbounds/list/slim`, client link, Xray logs | Disabled inbound/client, wrong port publish, Reality key/SNI mismatch, CDN in front of Reality | Compare generated link with inbound `streamSettings`; check Docker port publish. |
-| Reality link fails | `serverNames`, `shortIds`, public key, target, flow | Wrong SNI, reused/invalid shortId, client missing `fp/pbk/sid`, using CDN/reverse proxy | Regenerate link via `/clients/links/{email}` and compare client app fields. |
+| Reality link fails | `serverNames`, `shortIds`, public key, target, flow | Wrong SNI, missing/mismatched/invalid shortId, client missing `fp/pbk/sid`, using CDN/reverse proxy | Regenerate link via `/clients/links/{email}` and compare client app fields. |
 | Traffic remains zero | Runtime config, routing rules, client email, API rule order | Xray config error, missing email, migrated DB inconsistency, API routing rule not first | Check `/server/getConfigJson`, Xray logs, then update panel if migrated. |
 | IP limit ineffective | access log, Fail2ban status, Docker caps, proxy headers | Missing `./access.log`, no `NET_ADMIN`, CDN/tunnel hides real IP | Enable access log and Fail2ban; for proxy chains ensure real IP forwarding. |
 | Subscription broken | subscription server enabled/path/port, `subId`, client enabled | Wrong subscription path, port not open, expired/disabled client | Use `/clients/subLinks/{subId}` for API-level link validation. |
@@ -193,7 +201,7 @@ curl -fsS -H "Authorization: Bearer ${XUI_API_TOKEN}" \
 | `password` | string | Trojan/Shadowsocks | Secret. Trojan uses it directly; Shadowsocks may generate method-specific key. |
 | `auth` | string | Hysteria | Secret auth token; server can generate if omitted in client API. |
 | `security` | enum | VMess | `auto`, `aes-128-gcm`, `chacha20-poly1305`, `none`, `zero`. |
-| `flow` | enum | VLESS/Trojan over TCP TLS/Reality | ``, `xtls-rprx-vision`, `xtls-rprx-vision-udp443`. Runtime normalizes UDP443 to Vision. |
+| `flow` | enum | VLESS over TCP/RAW TLS/Reality | ``, `xtls-rprx-vision`, `xtls-rprx-vision-udp443`. Runtime normalizes UDP443 to Vision. |
 | `reverse` | object | VLESS | Optional simple reverse-proxy `{tag, sniffing}`. |
 | `subId` | string | tracked clients | Subscription id; server can generate. Treat as secret-bearing. |
 | `limitIp` | integer | tracked clients | Max simultaneous IPs; `0` disables. Needs Fail2ban/access log enforcement. |
@@ -263,14 +271,14 @@ Extras:
 | `externalProxy` | Emits multiple share links through external proxies. |
 | `finalmask` | Advanced mask configuration; preserve unless intentionally editing. |
 
-Sniffing:
+Sniffing (routing-only example; preserve intentional destination override/FakeDNS behavior):
 
 ```json
 {
   "enabled": true,
   "destOverride": ["http", "tls"],
   "metadataOnly": false,
-  "routeOnly": false,
+  "routeOnly": true,
   "ipsExcluded": [],
   "domainsExcluded": []
 }
@@ -314,7 +322,7 @@ Create VLESS TCP REALITY inbound, with generated Reality keys substituted:
       "minClientVer": "",
       "maxClientVer": "",
       "maxTimediff": 0,
-      "shortIds": ["<generated-short-id>"],
+      "shortIds": ["ab12"],
       "mldsa65Seed": "",
       "settings": {
         "publicKey": "<generated-public-key>",
@@ -329,7 +337,7 @@ Create VLESS TCP REALITY inbound, with generated Reality keys substituted:
     "enabled": true,
     "destOverride": ["http", "tls"],
     "metadataOnly": false,
-    "routeOnly": false,
+    "routeOnly": true,
     "ipsExcluded": [],
     "domainsExcluded": []
   }
@@ -354,4 +362,4 @@ Create a client on an existing VLESS/REALITY inbound:
 }
 ```
 
-The server will generate `id` and `subId` if omitted. Include `flow` only if `tlsFlowCapable` is true for the target inbound.
+The server will generate `id` and `subId` if omitted. For classic Vision, require a VLESS TCP/RAW TLS/REALITY inbound and confirm `tlsFlowCapable`; newer encryption modes need matching-core validation. The example shortId is illustrative, not a deployment secret.

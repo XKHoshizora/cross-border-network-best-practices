@@ -12,8 +12,11 @@ Usage:
     pbpaste | python scripts/parse_share_link.py -
     python scripts/parse_share_link.py --self-test
 
-Secrets are masked by default so the output is safe to paste into a chat log,
-which matches this repository's redaction rule.
+Credentials, names, paths, and unrecognized parameters are masked by default.
+Address/SNI/public-key metadata remains visible: review output before sharing.
+Use stdin for live links to avoid putting credentials into shell history/argv.
+
+Contents: redaction; decoding; protocol parsers; dispatch; self-test; CLI.
 """
 
 from __future__ import annotations
@@ -24,57 +27,91 @@ import json
 import sys
 from urllib.parse import parse_qs, unquote, urlsplit
 
-# Show this many leading characters of a secret, then mask the rest. Four is
-# enough to confirm "same credential" across two places without disclosing it.
-SECRET_PREFIX_VISIBLE = 4
+# Allow only known diagnostic fields; extensions may contain credentials.
+VISIBLE_PARAMS = {"type", "security", "encryption", "flow", "sni", "fp", "pbk",
+                  "sid", "alpn", "net", "tls", "scy", "host"}
 
 
 def mask(secret: str, reveal: bool) -> str:
-    if reveal or not secret:
-        return secret
-    if len(secret) <= SECRET_PREFIX_VISIBLE:
-        return "***"
-    return f"{secret[:SECRET_PREFIX_VISIBLE]}…(masked)"
+    return secret if reveal or not secret else "(masked)"
+
+
+def safe_params(params: dict, reveal: bool) -> dict:
+    return {key: value if reveal or key in VISIBLE_PARAMS else "(masked)"
+            for key, value in params.items()}
+
+
+def endpoint(address, port):
+    if not isinstance(address, str) or not address or any(c.isspace() for c in address):
+        raise ValueError("missing or invalid address")
+    if isinstance(port, bool) or not isinstance(port, (int, str)):
+        raise ValueError("missing or invalid port")
+    if isinstance(port, str) and not port.isascii():
+        raise ValueError("invalid port")
+    if isinstance(port, str) and not port.isdigit():
+        raise ValueError("invalid port")
+    port = int(port)
+    if not 1 <= port <= 65535:
+        raise ValueError("port out of range")
+    return address, port
 
 
 def _b64decode(data: str) -> bytes:
     # Share links use unpadded base64url or base64; tolerate both.
     data = data.strip().replace("-", "+").replace("_", "/")
     data += "=" * (-len(data) % 4)
-    return base64.b64decode(data)
+    return base64.b64decode(data, validate=True)
 
 
 def _flatten_qs(query: str) -> dict[str, str]:
-    return {k: v[0] for k, v in parse_qs(query, keep_blank_values=True).items()}
+    params = parse_qs(query, keep_blank_values=True)
+    if any(len(values) != 1 for values in params.values()):
+        raise ValueError("duplicate query parameter")
+    return {key: values[0] for key, values in params.items()}
 
 
 def parse_vless_trojan(link: str, scheme: str, reveal: bool) -> dict:
     parts = urlsplit(link)
-    secret = unquote(parts.username or "")
+    userinfo, separator, _ = parts.netloc.rpartition("@")
+    if not separator:
+        raise ValueError("missing credential")
+    secret = unquote(userinfo)
+    if not secret:
+        raise ValueError("missing credential")
+    address, port = endpoint(parts.hostname, parts.port)
     cred_field = "uuid" if scheme == "vless" else "password"
     return {
         "protocol": scheme,
-        "address": parts.hostname,
-        "port": parts.port,
+        "address": address,
+        "port": port,
         cred_field: mask(secret, reveal),
-        "params": _flatten_qs(parts.query),
-        "name": unquote(parts.fragment) if parts.fragment else None,
+        "params": safe_params(_flatten_qs(parts.query), reveal),
+        "name": mask(unquote(parts.fragment), reveal) if parts.fragment else None,
     }
 
 
 def parse_vmess(link: str, reveal: bool) -> dict:
     raw = link[len("vmess://"):]
     obj = json.loads(_b64decode(raw))
+    if not isinstance(obj, dict):
+        raise ValueError("VMess data must be an object")
+    if not isinstance(obj.get("id"), str) or not obj["id"]:
+        raise ValueError("missing VMess credential")
+    address, port = endpoint(obj.get("add"), obj.get("port"))
+    if "ps" in obj and not isinstance(obj["ps"], str):
+        raise ValueError("invalid VMess name")
     # VMess packs everything into a JSON blob; lift the transport/security keys
     # into `params` so the output shape matches vless/trojan.
     param_keys = ("net", "type", "host", "path", "tls", "sni", "alpn", "fp", "scy")
+    if any(key in obj and not isinstance(obj[key], str) for key in param_keys):
+        raise ValueError("VMess transport fields must be strings")
     return {
         "protocol": "vmess",
-        "address": obj.get("add"),
-        "port": int(obj["port"]) if str(obj.get("port", "")).isdigit() else obj.get("port"),
+        "address": address,
+        "port": port,
         "uuid": mask(str(obj.get("id", "")), reveal),
-        "params": {k: obj[k] for k in param_keys if k in obj},
-        "name": obj.get("ps"),
+        "params": safe_params({k: obj[k] for k in param_keys if k in obj}, reveal),
+        "name": mask(obj.get("ps", ""), reveal),
     }
 
 
@@ -100,11 +137,11 @@ def _self_test() -> int:
         out["protocol"] == "vless",
         out["address"] == "host.example.com",
         out["port"] == 443,
-        out["uuid"].startswith("1111") and "masked" in out["uuid"],
+        out["uuid"] == "(masked)",
         out["params"]["security"] == "reality",
         out["params"]["sni"] == "www.yahoo.com",
         out["params"]["pbk"] == "PUBLICKEY",      # public key is NOT masked
-        out["name"] == "my-node",
+        out["name"] == "(masked)",
     ]
     # reveal mode shows the full secret
     checks.append(parse_link(vless, reveal=True)["uuid"] == "11111111-2222-4333-8444-555555555555")
@@ -121,7 +158,7 @@ def _self_test() -> int:
     vout = parse_link(vmess)
     checks += [vout["protocol"] == "vmess", vout["address"] == "host.example.com",
                vout["port"] == 443, "masked" in vout["uuid"],
-               vout["params"]["net"] == "ws", vout["params"]["path"] == "/ws"]
+               vout["params"]["net"] == "ws", vout["params"]["path"] == "(masked)"]
 
     for i, ok in enumerate(checks):
         if not ok:
@@ -137,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("link", nargs="?", help="Share link, or '-' to read from stdin.")
     parser.add_argument("--show-secrets", action="store_true",
-                        help="Reveal the credential instead of masking it.")
+                        help="Reveal credentials, names, paths and extension parameters; private local use only.")
     parser.add_argument("--self-test", action="store_true",
                         help="Run built-in checks against example links and exit.")
     args = parser.parse_args(argv)
@@ -150,8 +187,9 @@ def main(argv: list[str] | None = None) -> int:
     link = sys.stdin.read() if args.link == "-" else args.link
     try:
         result = parse_link(link, reveal=args.show_secrets)
-    except (ValueError, json.JSONDecodeError, base64.binascii.Error) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    except (ValueError, UnicodeError, RecursionError):
+        # Parser exceptions may embed credentials or the original URL.
+        print("error: invalid share link; check scheme, encoding, credential, host, port and duplicate parameters.", file=sys.stderr)
         return 1
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0

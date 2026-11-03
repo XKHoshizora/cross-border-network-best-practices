@@ -6,6 +6,7 @@
 
 ## 目录
 
+- [版本兼容与执行边界](#版本兼容与执行边界)
 - [设计原则](#设计原则)
 - [从零安装](#从零安装)
 - [备份与恢复](#备份与恢复)
@@ -21,11 +22,17 @@
 - [辅助脚本](#辅助脚本)
 - [参考资料](#参考资料)
 
+## 版本兼容与执行边界
+
+先记录面板、Xray、客户端版本与部署方式，再查目标实例的 OpenAPI。下文 API 示例来自一个未记录精确版本的 3.x 实例；旧版本可能没有 client-first、slim 或 OpenAPI 接口。200 返回登录 HTML 不代表 API 成功；写请求超时后先读回状态，避免重复创建。面板 payload、Xray 配置和分享链接是不同的数据模型。
+
+安装、升级、分层排障和恢复操作请参阅[运维手册](references/operations-runbook.md)。2026-11-04 核对了上游文档，本次没有实测线上面板。已有明确授权可继续执行；破坏性或中断性操作若未获授权，先说明具体影响再确认。
+
 ## 设计原则
 
 - 先只读诊断，再提出变更。删除、重启、重置流量、导入数据库、更新面板都必须得到明确确认。
 - 优先使用 `/panel/api/*` 的 Bearer Token 接口做自动化。某些版本的 `/panel/setting/*` 和 `/panel/xray/*` 仍需要登录 Cookie + CSRF。
-- 入站和客户端配置使用现代嵌套 JSON，不使用旧式 JSON 字符串。
+- 目标版本支持时优先使用嵌套 JSON；旧 API 可能需要 JSON 编码字符串。
 - 不把真实 API Token、Reality 私钥、客户端 UUID/password/auth、subId 写进文档或仓库。
 
 ```mermaid
@@ -48,7 +55,7 @@ flowchart TD
 
 | 场景 | 推荐方式 | 原因 |
 | --- | --- | --- |
-| 普通 Linux VPS，想使用官方 `x-ui` 菜单 | 官方一行脚本 | 最贴近上游默认流程，安装后可用菜单管理服务、证书、凭据和防火墙。 |
+| 普通 Linux VPS，想使用官方 `x-ui` 菜单 | 已审阅的官方版本脚本 | 最贴近上游默认流程，安装后可用菜单管理服务、证书、凭据和防火墙。 |
 | 需要易备份、易迁移、隔离目录 | Docker Compose | `db/` 和 `cert/` 可直接备份，升级也清晰。 |
 | Docker 且会频繁增加入站端口 | Docker `network_mode: host` | 避免每次新增入站都忘记发布端口。 |
 | 大量客户端或多节点 | PostgreSQL | 比 SQLite 更适合高并发和高客户端数量。 |
@@ -57,16 +64,15 @@ flowchart TD
 
 ```bash
 sudo apt-get update
-sudo apt-get upgrade -y
 sudo apt-get install -y curl ca-certificates
 ```
 
-防火墙只开放必要端口。至少包括 SSH、面板端口、订阅端口和所有入站端口：
+防火墙只开放必要端口。先保留实际 SSH 端口，仅开放需要的入站；面板默认保持私有，订阅端口按需开放：
 
 ```bash
-sudo ufw allow 22/tcp
-sudo ufw allow 2053/tcp
+sudo ufw allow "${SSH_PORT:?Set the actual SSH port}/tcp"
 sudo ufw allow 443/tcp
+# Keep a second SSH session and recovery console before enabling UFW.
 sudo ufw enable
 sudo ufw status
 ```
@@ -76,7 +82,12 @@ sudo ufw status
 ### 原生安装
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
+export XUI_RELEASE='replace-with-reviewed-release-tag'
+curl -fSLo install.sh --connect-timeout 10 --max-time 120 \
+  "https://raw.githubusercontent.com/mhsanaei/3x-ui/${XUI_RELEASE}/install.sh"
+less install.sh
+# Run only after reviewing the script and its version-selection behavior.
+bash install.sh
 ```
 
 安装后记录安装器生成的随机用户名、密码、端口和 Web Base Path。之后可运行：
@@ -90,31 +101,27 @@ x-ui
 如果 GitHub 下载失败，先排查 DNS；只在确认是 IPv6/解析问题时使用：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh --ipv4)
+curl -4 -fSLo install.sh --connect-timeout 10 --max-time 120 \
+  "https://raw.githubusercontent.com/mhsanaei/3x-ui/${XUI_RELEASE}/install.sh"
 ```
 
 ### Docker Compose 安装
 
-`docker-compose.yml`：
+`docker-compose.yml`（先设置 `XUI_IMAGE` 为已审阅的 tag/digest；2053 为示例，须与面板实际监听端口一致；通过 SSH 隧道或受保护的反向代理访问）：
 
 ```yaml
 services:
   3xui:
-    image: ghcr.io/mhsanaei/3x-ui:latest
+    image: ${XUI_IMAGE:?Set a reviewed release tag or digest}
     container_name: 3xui_app
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
     volumes:
       - ./db/:/etc/x-ui/
       - ./cert/:/root/cert/
     environment:
-      XRAY_VMESS_AEAD_FORCED: "false"
-      XUI_ENABLE_FAIL2BAN: "true"
+      XUI_ENABLE_FAIL2BAN: "false"
     ports:
-      - "2053:2053"
-      - "443:443"
-      - "10882:10882"
+      - "127.0.0.1:2053:2053/tcp"
+      - "443:443/tcp"
     restart: unless-stopped
 ```
 
@@ -129,10 +136,10 @@ docker compose logs -f 3xui
 
 - `./db:/etc/x-ui` 保存 SQLite 数据库，便于备份。
 - `./cert:/root/cert` 保存面板或入站证书。
-- `NET_ADMIN` 和 `NET_RAW` 让容器内 Fail2ban 能实际写入 iptables/ip6tables；否则可能只记录封禁但不生效。
+- 基线关闭 Fail2ban 且不授予额外 capability。确需 IP 限制时再启用 Fail2ban、添加所需 `NET_ADMIN`/`NET_RAW` 并验证封禁实际生效。
 - `ports` 必须列出面板、订阅和每个入站端口；否则容器内入站开了，外部也连不上。
 
-如果需要自动暴露所有端口，可改用：
+确需 Linux host 网络时，删除 `ports` 并核对所有监听地址；Docker 发布端口不一定受普通 UFW INPUT 规则保护，须从外部验证。host 模式：
 
 ```yaml
 network_mode: host
@@ -158,21 +165,9 @@ network_mode: host
 - 证书：Docker 为 `./cert/`，原生安装为配置的证书路径。
 - Web Base Path、面板端口和凭据，作为密钥单独保存（绝不写入本仓库）。
 
-如何备份：
+优先使用 SQLite 在线备份机制，或在已授权停服后复制完整持久卷。不要直接复制运行中的单个 DB 文件，WAL 中可能还有已提交数据。备份还应包括证书、部署配置与版本记录，并使用受限权限和唯一文件名。
 
-```bash
-# 原生：停服以获得一致快照，再启动。
-x-ui stop
-cp /etc/x-ui/x-ui.db /root/x-ui-backup-$(date +%F).db
-x-ui start
-
-# Docker：打包挂载卷。
-docker compose stop
-tar czf xui-backup-$(date +%F).tgz ./db ./cert
-docker compose start
-```
-
-`x-ui` 菜单和 Telegram bot 也能生成备份。恢复数据库会覆盖现有数据，属于高危操作：使用 `/panel/api/server/importDB` 或菜单恢复前先确认，恢复后核对入站/客户端数量。
+[运维手册](references/operations-runbook.md#backup-and-rollback)提供 `.backup`、完整性检查和恢复演练步骤。PostgreSQL 必须使用对应备份工具。Telegram 备份会把含凭据的数据库交给外部服务，仅在用户明确要求时使用。回滚须恢复旧版本及其兼容的升级前数据库，不能仅降级镜像。
 
 ## 升级
 
@@ -188,8 +183,8 @@ flowchart LR
 ```
 
 1. 先备份数据库和证书。
-2. 记录当前版本（面板页脚或 `/panel/api/server/status`），Docker 还要记录当前镜像 tag，便于回滚。
-3. 原生：重跑官方安装器，或用 `x-ui` 菜单更新。Docker：`docker compose pull && docker compose up -d`，复用同样的 `./db/` 和 `./cert/` 卷。
+2. 记录当前版本（面板页脚或 `/panel/api/server/status`），Docker 还要记录当前镜像 tag/digest，便于回滚。
+3. 原生：重跑官方安装器，或用 `x-ui` 菜单更新。Docker：先将 `XUI_IMAGE` 指向已审阅的目标版本，再 `docker compose pull && docker compose up -d`，复用同样的 `./db/` 和 `./cert/` 卷。
 4. 验证：面板登录、`/panel/api/server/status`、入站/客户端数量不变、一条可用的客户端链接。
 5. 如果迁移异常（例如升级后流量一直是 0），查 `getConfigJson` 和 Xray 日志；必要时回滚到记录的版本并恢复数据库备份。
 
@@ -317,7 +312,7 @@ classDiagram
   "enabled": true,
   "destOverride": ["http", "tls"],
   "metadataOnly": false,
-  "routeOnly": false,
+  "routeOnly": true,
   "ipsExcluded": [],
   "domainsExcluded": []
 }
@@ -385,7 +380,7 @@ curl -fsS -H "Authorization: Bearer ${XUI_API_TOKEN}" \
     "enabled": true,
     "destOverride": ["http", "tls"],
     "metadataOnly": false,
-    "routeOnly": false,
+    "routeOnly": true,
     "ipsExcluded": [],
     "domainsExcluded": []
   }
@@ -432,7 +427,7 @@ curl -fsS -X POST \
 }
 ```
 
-为什么：3X-UI/Xray 只在 VLESS/Trojan + TCP + TLS/REALITY 主入站上真正使用 fallback；子入站通常监听本地地址，减少暴露面。
+先核对部署核心的 fallback 支持。常规 VLESS/Trojan TCP + TLS 回落与 REALITY 握手 target 的语义不同，不能直接互换；子入站保持本地或私有地址监听。
 
 ## 客户端配置
 
@@ -445,7 +440,7 @@ curl -fsS -X POST \
 | `password` | Trojan/Shadowsocks | 密钥；通过 `/clients/add` 可省略，由服务端生成或按方法生成。 |
 | `auth` | Hysteria | auth token；可由服务端生成。 |
 | `security` | VMess | `auto`, `aes-128-gcm`, `chacha20-poly1305`, `none`, `zero`。 |
-| `flow` | VLESS/Trojan TCP TLS/REALITY | `xtls-rprx-vision` 或空；只有目标入站 `tlsFlowCapable=true` 时设置。 |
+| `flow` | VLESS TCP/RAW TLS/REALITY | `xtls-rprx-vision` 或空；只有目标入站 `tlsFlowCapable=true` 时设置。 |
 | `subId` | 订阅 | 可省略，由服务端生成；不要公开。 |
 | `limitIp` | 连接控制 | `0` 关闭；生效需要 Fail2ban 和 access log。 |
 | `totalGB` | 流量 | API 实际使用字节；`53687091200` = 50 GiB；`0` 不限。 |
@@ -612,29 +607,23 @@ curl -fsS -X POST -H "Authorization: Bearer ${XUI_API_TOKEN}" \
 - 已确认目标端口未冲突。
 - 已确认云防火墙、系统防火墙、Docker 端口映射一致。
 - 已确认不会把 live secret 写入仓库或聊天记录。
-- 写入 payload 已由用户确认。
+- 变更在用户授权范围内；额外中断或破坏性影响已说明并获授权。
 - 写入后有验证命令和回滚路径。
 
 ## 辅助脚本
 
-`scripts/` 目录提供离线辅助脚本，不需要网络或面板访问，在任何 surface 上都能运行，适合在起草变更时使用。它们是对「向用户展示每条 payload 和命令并确认」的补充，而非替代。
+需要 Python 3.10+，仅离线运行。`validate_config.py` 检查嵌套/旧式 JSON、字段类型、经典 Vision、shortId 与单位错误。退出码：0 无错误，1 校验错误，2 输入读取失败；警告仍需处理。它不能检测 CDN、网络可达性或证明目标版本兼容。
 
-- `validate_config.py` —— 在 POST 之前校验入站或 client-add payload：端口范围、VLESS 的 `decryption`/`encryption`、XTLS-Vision 适用条件、REALITY 是否被放在 CDN 后，以及常见单位错误（字节 vs GiB、毫秒 vs 秒）。退出码即错误数。
-- `parse_share_link.py` —— 把 VLESS/VMess/Trojan 分享链接解析成规范字段，便于和入站对照。凭据默认脱敏，输出可安全分享。
+`parse_share_link.py` 默认完整隐藏凭据、名称、路径和未知参数值，但地址、SNI、公钥等元数据仍可见，分享前应检查。真实链接从 stdin 输入，避免进入命令历史/进程参数；`--show-secrets` 仅用于确有需要的私下检查。
 
 ```bash
-# 写入前校验 payload（退出码 = 错误数）。
-python scripts/validate_config.py vless-reality-443.json
-cat client-alice.json | python scripts/validate_config.py -
-
-# 解析分享链接（凭据脱敏）。
-python scripts/parse_share_link.py 'vless://...#alice-node'
-
-# 确认脚本可用。
-python scripts/validate_config.py --self-test
+python3 scripts/validate_config.py inbound.json
+python3 scripts/parse_share_link.py - < private-link.txt
+python3 scripts/validate_config.py --self-test
+python3 scripts/parse_share_link.py --self-test
 ```
 
-刻意不提供联网脚本：部分 surface 没有网络，而且把实时 API 调用藏进脚本会削弱「先展示再确认」的工作方式。
+从仓库根目录运行回归测试：`python3 -m unittest discover -s tests -v`。GitHub Actions 会运行离线检查，场景评估仍需用真实 Agent 对话验证。
 
 ## 参考资料
 

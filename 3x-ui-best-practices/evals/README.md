@@ -15,7 +15,7 @@ Each `*.json` file is one scenario:
 ```
 
 There is **no built-in runner** — these are a rubric. Run each `query` against
-Claude with the skill loaded (attaching any `files`), then judge the transcript
+an agent with the skill loaded (attaching any `files`), then judge the transcript
 against `expected_behavior`. Use them as a baseline when changing the skill:
 behavior should not regress.
 
@@ -32,3 +32,9 @@ secrets, and explaining parameter choices — not exact wording.
 | `03-install-and-harden.json` | Firewall + credential/path/HTTPS/2FA hardening; Bearer for automation. |
 | `04-safe-upgrade-with-backup.json` | Backup before upgrade; record tag; verify after; restore is high-risk. |
 | `05-validate-payload-before-write.json` | Validate a payload before POST; confirm before writing. |
+| `06-legacy-api-discovery.json` | Handles missing routes/HTML without mutation or forced upgrade. |
+| `07-write-timeout.json` | Reads back before retrying; preserves existing authorization. |
+| `08-sqlite-rollback.json` | Restores compatible artifact/DB pair; respects planning-only scope. |
+| `09-shared-client-and-modern-encryption.json` | Checks all attachments; preserves version-specific encryption. |
+
+Helper regression tests run separately with `python3 -m unittest discover -s tests -v` from the repository root. Passing helper tests or parsing these JSON files does not mean agent scenario evaluations have passed.
