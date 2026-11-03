@@ -1,0 +1,12 @@
+{
+  "skills": [
+    "3x-ui-best-practices"
+  ],
+  "query": "My existing 3x-ui panel opens, but /panel/api/inbounds/options returns 404 and OpenAPI returns HTML. Find the cause without upgrading it.",
+  "files": [],
+  "expected_behavior": [
+    "Distinguishes wrong base path, authentication, HTML login response and unavailable version-specific routes using read-only evidence.",
+    "Records panel/core version and consults the matching API; does not assume client-first or Bearer routes exist.",
+    "Does not upgrade, reset credentials, or change the access path to force discovery."
+  ]
+}

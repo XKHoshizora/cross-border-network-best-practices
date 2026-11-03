@@ -37,6 +37,18 @@
 - [`3x-ui-best-practices/README.md`](./3x-ui-best-practices/README.md)
 - [`3x-ui-best-practices/README.zh_CN.md`](./3x-ui-best-practices/README.zh_CN.md)
 
+## 开发与验证
+
+当前 Skill 增加了[版本感知运维手册](3x-ui-best-practices/references/operations-runbook.md)、异常输入与脱敏回归测试，以及 GitHub Actions 离线检查。Python 3.10+ 即可运行，无第三方依赖：
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 3x-ui-best-practices/scripts/validate_config.py --self-test
+python3 3x-ui-best-practices/scripts/parse_share_link.py --self-test
+```
+
+自动化检查覆盖辅助工具；`evals/` 是 Agent 行为评估场景，不代表已完成线上部署验证。
+
 ## 仓库结构
 
 ```text

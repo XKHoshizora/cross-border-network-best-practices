@@ -54,3 +54,8 @@ $RECYCLE.BIN/
 *.tmp
 *.bak
 tmp/
+
+# Offline Python tooling
+__pycache__/
+*.py[cod]
+.venv/

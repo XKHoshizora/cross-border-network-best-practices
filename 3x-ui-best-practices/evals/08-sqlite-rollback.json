@@ -1,0 +1,12 @@
+{
+  "skills": [
+    "3x-ui-best-practices"
+  ],
+  "query": "The Docker panel upgrade migrated SQLite and clients stopped working. I have the previous image digest and a pre-upgrade backup. Prepare a recovery plan; do not run it yet.",
+  "files": [],
+  "expected_behavior": [
+    "Keeps the operation in planning mode and pairs the previous artifact with its compatible pre-migration database.",
+    "Explains loss of writes since the backup, protects secret-bearing backups, and verifies integrity and isolated recovery.",
+    "Does not copy only the live DB while ignoring WAL or delete WAL files; includes certificates/configuration and post-restore client tests."
+  ]
+}

@@ -1,111 +1,67 @@
 ---
 name: 3x-ui-best-practices
-description: Install, secure, inspect, configure, and troubleshoot 3x-ui/Xray panels, including fresh VPS or Docker setup, SSL/reverse proxy, inbounds, clients, VLESS/REALITY, TLS, fallbacks, subscriptions, API automation, live diagnostics, and recovery. Use when the user mentions 3x-ui, 3X-UI, Xray panel, inbounds, clients, VLESS, VMess, Trojan, Shadowsocks, Hysteria, WireGuard, REALITY, subscription links, panel API, install, debug, logs, traffic not counted, connection failure, or best-practice proxy/VPN configuration.
+description: Install, configure, maintain, and troubleshoot 3x-ui panels and their managed Xray inbounds, clients, subscriptions, and APIs. Use for 3x-ui deployment or upgrades, VLESS/REALITY link mismatches, panel authentication, traffic accounting, and connection failures in a 3x-ui setup. General VPN selection or standalone client configuration without a 3x-ui context is outside this skill.
 ---
 
 # 3x-ui Best Practices
 
-Use this skill to work with 3x-ui as a full Xray control-plane lifecycle: install, harden, configure inbounds/clients, validate links, and troubleshoot failures.
+Work from the deployed panel and core versions, preserve existing service, and verify the user's actual connection path. Keep panel payloads, generated Xray configuration, and client share links distinct.
 
 ## Operating Rules
 
-1. Treat every panel as production unless the user says otherwise.
-2. Never call destructive or disruptive endpoints without explicit user approval: delete, bulk delete, reset traffic, restart/stop Xray, update panel, import DB, restore DB, regenerate live TLS/Reality secrets, or overwrite settings.
-3. Never write API tokens, Reality private keys, client UUIDs/passwords/auth values, subscription IDs, Telegram IDs, or live URLs containing secrets into committed artifacts unless the user explicitly asks for those exact values.
-4. Prefer `/panel/api/inbounds/options`, `/panel/api/inbounds/list/slim`, and paged client lists for discovery. Fetch full inbound/client details only when the task requires secret-bearing fields.
-5. Prefer client-first APIs (`/panel/api/clients/add`, `/update/:email`, `/bulkCreate`, `/bulkAttach`, `/bulkDetach`) over hand-editing `settings.clients[]` inside an inbound.
-6. Use nested JSON for `settings`, `streamSettings`, and `sniffing`; 3x-ui still accepts legacy JSON-encoded strings, but nested objects are the modern API shape.
-7. If using Bearer auth, assume it is reliable for `/panel/api/*`. Some deployed versions and source routes keep `/panel/setting/*` and `/panel/xray/*` behind UI session + CSRF even when OpenAPI describes global security.
+1. Treat existing panels as production. Start with read-only checks; an HTTP `POST` can still be diagnostic, while a nominally routine save may reload Xray.
+2. Respect authorization already given. Before a disruptive action, make its exact target, effects, validation, and recovery concrete. Obtain explicit authorization for deletion, accounting reset, service restart/stop, update, DB import/restore, or live key rotation if the current request has not already authorized it. Routine requested edits do not need repeated confirmation.
+3. Keep live credentials, UUIDs, private keys, subscription IDs/URLs, DB dumps, and raw runtime configs out of committed artifacts and ordinary summaries. Show redacted diffs; keep executable secret-bearing payloads in protected local files. Do not fetch secrets merely to inventory a panel.
+4. Prefer client-specific APIs and minimal changes when the deployed version supports them. Read the current object and preserve unrelated fields before replacement updates. Never blindly retry a write after a timeout; read back first to determine whether it succeeded.
+5. Follow the deployed OpenAPI and matching source, not a route or schema assumed from this repository. Nested JSON is preferred where supported; older APIs may require JSON-encoded objects. Preserve unknown fields and never automatically downgrade version-specific encryption.
 
-## Discovery Workflow
+## Discovery
 
-1. Identify the panel base path and OpenAPI URL, usually `<panel-url>/panel/api/openapi.json` or `<panel-url>/<access-path>/panel/api/openapi.json`.
-2. Read the OpenAPI first, then confirm against source or live responses if behavior matters.
-3. Inventory current topology with read-only calls:
-   - `GET /panel/api/inbounds/options`
-   - `GET /panel/api/inbounds/list/slim`
-   - `GET /panel/api/clients/list/paged?page=1&pageSize=25`
-   - optional status: `GET /panel/api/server/status`
-4. Summarize protocol, port, transport, security, sniffing, client count, and whether an inbound is `tlsFlowCapable`.
-5. For any proposed write, present the exact payload and the rollback/validation plan before executing.
+1. Establish the goal, authorization, panel version, Xray version, native/Docker mode, client application/core version, database backend, and direct/CDN/reverse-proxy topology. Inspect available context first; ask only for missing facts needed for the next action.
+2. Resolve the panel URL plus web base path once. Probe the deployed OpenAPI (commonly `<base>/panel/api/openapi.json`) and confirm content type and status. A 200 HTML login page is not API success. Avoid following authenticated redirects to another origin.
+3. When advertised, start with `/panel/api/inbounds/options`, `/inbounds/list/slim`, `/clients/list/paged?page=1&pageSize=25`, and `/server/status`. Paths after the first item share `/panel/api`. Paginate when complete counts matter.
+4. On 404 or missing client-first routes, inspect the deployed version's documented read-only alternatives. Do not upgrade, reset the access path, or guess write endpoints to make discovery work.
+5. Bearer authentication is useful for `/panel/api/*` where supported. Some deployments keep `/panel/setting/*` and `/panel/xray/*` behind UI session + CSRF even if OpenAPI advertises global security. Retain that boundary.
 
-## Fresh Install Workflow
+## Installation and Maintenance
 
-1. Gather target OS, architecture, provider firewall rules, desired panel port/path, domain/SSL availability, and whether Docker is required.
-2. Choose installation mode:
-   - Native one-line install for a normal Linux VPS where the user wants the upstream management menu.
-   - Docker Compose when repeatability, simple backup, or isolated filesystem layout matters.
-   - Docker host networking when many inbound ports will be created dynamically.
-3. Before install, open SSH and intended panel/inbound ports in the provider firewall and local firewall.
-4. Install 3x-ui, then immediately rotate admin credentials, set a custom web base path, enable HTTPS for the panel when a domain/cert is available, and consider 2FA.
-5. If using Docker with Fail2ban/IP limits, include `NET_ADMIN` and `NET_RAW`. If not using host networking, publish every inbound port explicitly.
-6. Verify with: panel login, service/container status, `/panel/api/openapi.json`, `/panel/api/server/status`, and a simple inbound/client link.
+Read [references/operations-runbook.md](references/operations-runbook.md) for installation, upgrades, backup/restore, or network diagnosis.
 
-## Upgrade and Backup Workflow
+- Record OS/architecture, occupied ports, existing SSH port and an accessible recovery console. Preserve SSH access before changing either cloud or host firewall rules.
+- Select an explicit upstream release/image digest. Download and inspect installers before running them; do not treat a mutable `master` script or `latest` image as a reproducible deployment.
+- Keep the panel on loopback/private access or restrict it to trusted admin addresses. Use HTTPS or an SSH tunnel; a random base path supplements authentication and is not access control.
+- In Docker bridge mode, publish only required ports and distinguish TCP/UDP. Host networking changes the exposure boundary and does not use `ports`. Add Fail2ban capabilities only if that feature is required, then verify enforcement.
+- Before upgrade, record panel/core/image versions and take a consistent database backup plus certificates and deployment configuration. Use SQLite's backup mechanism or an authorized stopped-service copy; never copy a live DB file alone. PostgreSQL requires its own backup procedure.
+- Restore the old binary/image **together with a compatible pre-migration database** when rollback is necessary. A successful download or container start is not an accepted upgrade.
 
-1. Back up before any upgrade, migration, or risky write. The SQLite DB is `/etc/x-ui/x-ui.db` (native) or the `./db/` volume (Docker); also save `./cert/` when certificates are local. Prefer backing up with the service stopped, or use the panel/`x-ui` menu backup.
-2. Native upgrade: rerun the official installer or use the `x-ui` menu update entry. Docker upgrade: `docker compose pull && docker compose up -d` while reusing the same `./db/` and `./cert/` volumes.
-3. Record the prior version/image tag so a misbehaving migration can be rolled back to a known-good state.
-4. After upgrade, confirm `/panel/api/server/status`, check that inbound/client counts are unchanged, and re-test one client link. Treat panel update and DB import/restore as high-risk: confirm with the user first.
+## Configuration
 
-## Configuration Guidance
+- A direct VPS with a compatible client can use VLESS over TCP/RAW + REALITY with classic `decryption="none"` and panel `encryption="none"`. This is a baseline, not a mandate to replace existing encryption.
+- Classic Vision is a VLESS client flow over TCP/RAW + TLS/REALITY. Check the panel's `tlsFlowCapable` and the matching core; do not add Vision to Trojan just because a panel accepts the field. Newer VLESS Encryption modes require separate version-specific validation.
+- REALITY needs a path that does not terminate its TLS handshake. An ordinary HTTPS CDN/reverse proxy is unsuitable; L4 pass-through is a different topology to verify. Choose and test the target from the VPS rather than copying a permanently recommended domain.
+- For CDN paths, verify actual support for the selected WS/gRPC/HTTPUpgrade/XHTTP transport at both ends and at the intermediary. Do not assume all CDNs support every transport.
+- Keep fallback children private/loopback. Inspect the exact core's fallback semantics; do not treat REALITY's handshake target as interchangeable with VLESS/Trojan fallbacks.
+- Use sniffing only for a defined routing purpose. Prefer `routeOnly=true` if only routing decisions need the sniffed domain; preserve existing FakeDNS and destination-override behavior.
+- `totalGB` is bytes; `expiryTime` commonly uses milliseconds, with zero unlimited. Some versions use negative expiry for first-use duration: inspect and preserve it. Confirm all attached inbounds before changing a shared client's flow or identity.
 
-Prefer these defaults unless the user's network constraints say otherwise:
+## Diagnosis and Changes
 
-- Public direct server, single 443 entry: VLESS over TCP with REALITY, `settings.decryption="none"`, `settings.encryption="none"`, sniffing enabled for `http` and `tls` at minimum.
-- CDN/reverse-proxy path routing: VLESS/VMess/Trojan over WebSocket, gRPC, HTTPUpgrade, or XHTTP with TLS. Do not put REALITY behind a CDN reverse proxy.
-- XTLS Vision flow: use only on VLESS over TCP with `security` of `tls` or `reality`; 3x-ui exposes `tlsFlowCapable` for this exact gate.
-- Fallbacks: only use a VLESS or Trojan master on TCP with TLS or REALITY. Point fallback children to loopback/private listeners and document match rules (`alpn`, `path`, `dest`, `xver`).
-- IP limits: require access logs and Fail2ban enforcement. Warn that IP tunnel/proxy chains can make IP limits inaccurate.
-- Client identity: `email` is the unique stable key. `expiryTime=0` means no expiry, `totalGB=0` means no quota, and API quota values are bytes despite the historical `totalGB` name.
+1. Separate panel reachability from the proxy data path. Check service/listener, firewall/Docker mapping, DNS A/AAAA, TLS/REALITY handshake, client eligibility, then routing/site-specific behavior. Read logs in a bounded time window and redact them.
+2. Use supported status, slim inventory, traffic and log endpoints first. Retrieve full client/runtime configuration only when needed. Compare intended panel state, rendered core state, and imported client fields.
+3. A running core or successful TCP connect proves only one layer. Test an actual client request from the affected network, then verify counters and subscriptions if relevant.
+4. Prepare one minimal change with a redacted before/after, affected users, and rollback. Run the offline preflight, then validate with the deployed schema/core as available. API HTTP success alone is insufficient: check application success/error fields and read back persisted state.
+5. On failure, stop repeated writes/restarts, preserve evidence, and report what is confirmed versus untested. Do not rotate keys, reset counters, or reinstall as a generic diagnostic step.
 
-## Troubleshooting Workflow
+## Offline Helpers
 
-1. Classify the failure: panel unreachable, login/auth problem, Xray stopped, client cannot connect, traffic not counted, IP limit not enforced, subscription broken, high CPU/disk, or routing/site access issue.
-2. Use read-only checks first:
-   - `GET /panel/api/server/status`
-   - `POST /panel/api/server/logs/{count}`
-   - `POST /panel/api/server/xraylogs/{count}`
-   - `GET /panel/api/server/getConfigJson`
-   - `GET /panel/api/inbounds/list/slim`
-   - `GET /panel/api/clients/traffic/{email}`
-   - `POST /panel/api/clients/onlines`
-3. Compare intended config to runtime config. Watch for port conflicts, missing Docker port publishes, wrong base path, expired client, exhausted quota, disabled inbound/client, bad Reality SNI/public key/shortId, CDN in front of Reality, and missing access log for IP limits.
-4. Only after evidence, propose a minimal fix and name its side effects, especially Xray restart, traffic reset, DB restore, or client secret rotation.
+Requires Python 3.10+; neither helper accesses a panel or network.
 
-## API Use
-
-Use environment variables in examples:
-
-```bash
-export XUI_BASE='https://example.com/access-path'
-export XUI_API_TOKEN='...'
-curl -fsS -H "Authorization: Bearer ${XUI_API_TOKEN}" \
-  "${XUI_BASE}/panel/api/inbounds/options"
-```
-
-For writes:
-
-1. Fetch the current object first.
-2. Preserve fields the user did not ask to change.
-3. Use the most specific endpoint (`setEnable` for enable flips, client endpoints for client changes).
-4. Verify with a read-only endpoint and, if needed, generated links (`/panel/api/clients/links/:email`) without exposing secrets in the final answer.
-
-## Scripts
-
-Offline helpers in `scripts/` run on any surface (no network, no panel access). They complement — but never replace — showing the user each payload and command:
-
-- Execute `scripts/validate_config.py <file|->` to validate an inbound or client-add payload before POSTing it: flow placement, VLESS `decryption`/`encryption`, XTLS-Vision gating, REALITY-behind-CDN, and byte-vs-GiB / ms-vs-seconds mistakes. The exit code is the error count; use it as the validate step before any write.
-- Execute `scripts/parse_share_link.py '<link>'` to decode a VLESS/VMess/Trojan link into normalized fields to compare against an inbound; the credential is masked by default.
-
-Run a script's `--self-test` to confirm it works. Do not add network-calling scripts: some surfaces have no network, and hiding live calls would undercut the show-then-confirm workflow.
+- Run `python3 scripts/validate_config.py <file|->` for inbound, raw client, or client-add payload preflight. It handles nested and legacy JSON, types, classic Vision, short IDs and unit mistakes. Exit codes: 0 no errors, 1 validation errors, 2 input/read failure. Warnings and a zero exit code do not certify deployed compatibility, reachability, or CDN topology.
+- Run `python3 scripts/parse_share_link.py -` with a link on stdin. Credentials, names, paths and unknown query values are masked. Address/SNI/public-key metadata remains visible; review before sharing. `--show-secrets` is for explicitly needed private local inspection only. Avoid placing live links in command arguments/history.
+- Run each helper with `--self-test`; repository maintainers also run `python3 -m unittest discover -s tests -v` from the repository root.
 
 ## References
 
-Read [references/api-and-config-reference.md](references/api-and-config-reference.md) when you need endpoint groups, field tables, protocol-specific `settings`, `streamSettings`, or example payloads.
-
-Read [README.md](README.md) when the user wants English human-facing documentation, diagrams, or copy-pasteable configuration examples.
-
-Read [README.zh_CN.md](README.zh_CN.md) when the user wants the same documentation in Simplified Chinese.
-
-Use the offline helpers in [scripts/](scripts/): `validate_config.py` (validate a payload before writing) and `parse_share_link.py` (decode a share link, secrets masked).
+- [references/api-and-config-reference.md](references/api-and-config-reference.md): endpoint risk classes, field tables, baseline payloads and the original observed deployment caveats; consult for API/config work.
+- [references/operations-runbook.md](references/operations-runbook.md): version evidence, layered diagnosis, consistent backup, acceptance and rollback; consult for operational work.
+- [README.md](README.md) / [README.zh_CN.md](README.zh_CN.md): human-facing guides and examples in English / Simplified Chinese.

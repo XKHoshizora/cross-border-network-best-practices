@@ -1,0 +1,12 @@
+{
+  "skills": [
+    "3x-ui-best-practices"
+  ],
+  "query": "I authorized adding one client. The POST timed out after sending the body. Please finish the job.",
+  "files": [],
+  "expected_behavior": [
+    "Reads back client/inbound state before retrying; reconciles whether creation already succeeded.",
+    "Preserves the existing authorization and does not ask for the same approval again.",
+    "Does not repeat the POST blindly or create a second identity; reports ambiguous state if readback cannot resolve it."
+  ]
+}

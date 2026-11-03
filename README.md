@@ -37,6 +37,18 @@ Entry files:
 - [`3x-ui-best-practices/README.md`](./3x-ui-best-practices/README.md)
 - [`3x-ui-best-practices/README.zh_CN.md`](./3x-ui-best-practices/README.zh_CN.md)
 
+## Development and validation
+
+The current Skill includes a [version-aware operations runbook](3x-ui-best-practices/references/operations-runbook.md), malformed-input/redaction regression tests, and offline GitHub Actions checks. Use Python 3.10+; no third-party dependencies are needed:
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 3x-ui-best-practices/scripts/validate_config.py --self-test
+python3 3x-ui-best-practices/scripts/parse_share_link.py --self-test
+```
+
+Automated checks cover helper behavior; `evals/` contains agent behavior rubrics, not evidence of live deployment validation.
+
 ## Repository Layout
 
 ```text
